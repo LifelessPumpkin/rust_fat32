@@ -109,6 +109,10 @@ pub fn mkdir(dirname: &str, shell: &mut ShellCore) {
         .vol
         .initialize_directory_cluster(new_dir_cluster, parent_cluster);
 
+    if let Err(e) = shell.vol.flush_fat() {
+        eprintln!("mkdir: failed to flush FAT to disk: {e}");
+        return;
+    }
     // Optional: you can print success or stay silent
     // println!("Created directory '{}'", dirname);
 }

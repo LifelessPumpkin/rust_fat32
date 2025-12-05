@@ -51,6 +51,9 @@ impl Volume {
     }
 
     pub fn get_first_sector_of_cluster(&self, cluster: u32) -> u32 {
+        if cluster < 2 {
+            panic!("Invalid cluster: {}", cluster);
+        }
         self.first_data_sector + (cluster - 2) * self.bpb.bpb_sec_per_clus as u32
     }
 
@@ -221,13 +224,37 @@ impl Volume {
         entry[14..20].fill(0);
 
         // First cluster
-        let high = (first_cluster >> 16) as u16;
-        let low  = (first_cluster & 0xFFFF) as u16;
-
-        entry[20..22].copy_from_slice(&high.to_le_bytes());
-        entry[26..28].copy_from_slice(&low.to_le_bytes());
+        entry[20..22].copy_from_slice(&((first_cluster >> 16) as u16).to_le_bytes());
+        entry[22..26].fill(0);
+        entry[26..28].copy_from_slice(&(first_cluster as u16).to_le_bytes());
         // File size
         entry[28..32].copy_from_slice(&file_size.to_le_bytes());
+    }
+
+    pub fn flush_fat(&mut self) -> std::io::Result<()> {
+        let bytes_per_sector = self.bpb.bpb_byts_per_sec as usize;
+        let fat_size_bytes = (self.bpb.bpb_fatsz32 as usize) * bytes_per_sector;
+
+        // Rebuild FAT as raw bytes
+        let mut fat_raw = vec![0u8; fat_size_bytes];
+
+        for (i, entry) in self.fat.iter().enumerate() {
+            let bytes = entry.to_le_bytes();
+            fat_raw[i * 4..i * 4 + 4].copy_from_slice(&bytes);
+        }
+
+        // Overwrite FAT#1 (and ideally FAT#2)
+        let fat_start_sector = self.first_fat_sector;
+
+        for sector in 0..self.bpb.bpb_fatsz32 {
+            let offset = (sector as usize) * bytes_per_sector;
+            self.write_sector(
+                fat_start_sector + sector,
+                &fat_raw[offset..offset + bytes_per_sector],
+            )?;
+        }
+
+        Ok(())
     }
 
     pub fn parse_short_name(&self, raw_name: &[u8]) -> String {

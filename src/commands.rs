@@ -4,7 +4,7 @@ use crate::{
 
 pub fn is_built_in(command: &str) -> bool {
     match command {
-        "info" | "exit" | "cd" | "ls" | "open" | "close" | "lsof" | "lseek" | "read" | "mkdir" => true,
+        "info" | "exit" | "cd" | "ls" | "open" | "close" | "lsof" | "lseek" | "read" | "mkdir" | "creat" => true,
         _ => false,
     }
 }
@@ -22,6 +22,7 @@ pub fn execute_built_in(command: &str, shell: &mut ShellCore, args: &[String]) {
         "lseek" => lseek::lseek(args.get(0).and_then(|s| s.parse().ok()).unwrap_or(0), args.get(1).and_then(|s| s.parse().ok()).unwrap_or(0), shell),
         "read" => read::read(args.get(0).and_then(|s| s.parse().ok()).unwrap_or(0), args.get(1).and_then(|s| s.parse().ok()).unwrap_or(0), shell),  
         "mkdir" => mkdir::mkdir(args.get(0).map(|s| s.as_str()).unwrap_or(""), shell),
+        "creat" => creat::creat(args.get(0).map(|s| s.as_str()).unwrap_or(""), shell),
         _ => eprintln!("Unknown built-in command: {}", command),
     }
 }
