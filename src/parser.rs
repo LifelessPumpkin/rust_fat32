@@ -17,12 +17,7 @@ pub enum Token {
 impl PartialEq for Token {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            // Compare only the discriminant (variant name) for Pipe
             (Token::Pipe, Token::Pipe) => true,
-            // Compare RedirOut and RedirIn by their inner String values
-            // (Token::RedirOut(s1), Token::RedirOut(s2)) => s1 == s2,
-            // (Token::RedirIn(s1), Token::RedirIn(s2)) => s1 == s2,
-            // All other combinations are not equal
             _ => false,
         }
     }
@@ -30,11 +25,9 @@ impl PartialEq for Token {
 
 pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
-    // Tokenize by iterating characters so quoted strings remain a single token.
     let mut cur = String::new();
     let mut chars = input.chars().peekable();
 
-    // helper to push a completed token string into tokens with correct variant
     fn push_token(tokens: &mut Vec<Token>, s: String) {
         if s.is_empty() {
             return;
@@ -60,22 +53,18 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
     while let Some(ch) = chars.next() {
         match ch {
-            // whitespace separates tokens when not in quotes
             ' ' | '\t' | '\n' if !cur.is_empty() => {
                 push_token(&mut tokens, cur.clone());
                 cur.clear();
             }
             ' ' | '\t' | '\n' => {
-                // skip multiple whitespace
             }
             '"' | '\'' => {
-                // quoted string: collect until matching quote, honoring backslash escapes
                 let quote = ch;
                 let mut collected = String::new();
                 while let Some(&next_ch) = chars.peek() {
                     chars.next();
                     if next_ch == '\\' {
-                        // escape next character if any
                         if let Some(esc) = chars.next() {
                             collected.push(esc);
                         }
@@ -86,7 +75,6 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                     }
                     collected.push(next_ch);
                 }
-                // push any pending unquoted prefix + quoted content as a single token
                 if !cur.is_empty() {
                     cur.push_str(&collected);
                     push_token(&mut tokens, cur.clone());
@@ -136,9 +124,6 @@ pub fn expand_tokens(tokens: Vec<Token>) -> Vec<String> {
             }
 
             Token::Word(s) => {
-                // If this is the first line or it follows a pipe, I need to search PATH for the executable
-                // If it follows a redirection, it's a filename, so just add it as an argument
-                // Otherwise, it's just an argument
                 if prev_token.is_none() || prev_token == Some(Token::Pipe) {
                     let program = resolve_path(&s);
                     expanded_tokens.push(program);
@@ -159,12 +144,10 @@ pub fn expand_tokens(tokens: Vec<Token>) -> Vec<String> {
                 prev_token = Some(Token::Pipe);
             }
             Token::RedirOut => {
-                // If it's a redirection, the next token should be a filename
                 expanded_tokens.push(">".to_string());
                 prev_token = Some(Token::RedirOut);
             }
             Token::RedirIn => {
-                // If it's a redirection, the next token should be a filename
                 expanded_tokens.push("<".to_string());
                 prev_token = Some(Token::RedirIn);
             }
@@ -174,18 +157,10 @@ pub fn expand_tokens(tokens: Vec<Token>) -> Vec<String> {
             }
         }
     }
-    // For debugging purposes
-    // println!("Expanded Tokens: ");
-    // for t in expanded_tokens.iter() {
-    //     println!("{} ", t.to_str().unwrap());
-    // }
-    // println!();
     expanded_tokens
 }
 
-// Maybe I should also resolve built-in commands here?
 fn resolve_path(s: &str) -> String {
-    // First check if its a built-in command
     if is_built_in(s) {
         return s.to_string();
     }

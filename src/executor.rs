@@ -1,6 +1,5 @@
 use crate::commands::*;
 use crate::{
-    // commands::is_built_in, execute_built_in,
     models::ShellCore, 
     parser::{expand_tokens, tokenize}};
 
@@ -8,11 +7,11 @@ use crate::{
 struct CommandPart {
     program: String,
     args: Vec<String>,
-    redir_in: Option<String>,   // e.g. < input.txt
-    redir_out: Option<String>,  // e.g. > output.txt
-    direction: Option<Direction>, // still keep this for pipes or future chaining
+    redir_in: Option<String>,
+    redir_out: Option<String>,
+    direction: Option<Direction>,
     background: bool,
-    parse_error: Option<&'static str>,  //for redirection issues
+    parse_error: Option<&'static str>, 
 }
 
 enum Direction {
@@ -23,7 +22,6 @@ impl PartialEq for Direction {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Direction::Pipe, Direction::Pipe) => true,
-            // _ => false,
         }
     }
 }
@@ -123,21 +121,10 @@ fn interpret_tokens(tokens: Vec<String>) -> Vec<CommandPart> {
 }
 
 fn execute(commands: Vec<CommandPart>, shell: &mut ShellCore) {
-    // For now, just print the commands to verify parsing
     for part in commands.iter() {
-
-        // Here is where actual execution logic would go
-        // Works with built-in commands for now
         if is_built_in(&part.program) {
-            // For built-in commands, we might need access to the BootSector or ShellCore
-            // This is a placeholder; actual implementation would pass necessary context
             execute_built_in(&part.program, shell, &part.args);
         } 
-        // else {
-        //     println!("Executing external command: {}", part.program);
-        //     // External command execution logic would go here
-        // }
-        
     }
 }
 

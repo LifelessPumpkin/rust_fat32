@@ -7,14 +7,12 @@ pub fn lsof(shell: &ShellCore) {
         return;
     }
     println!("Open Files:");
-    // Needs to list the index, file name, mode, offset, and path for every opened file
     for of in shell.open_files.iter() {
         let mode_str = match of.mode {
             FileMode::Read => "r",
             FileMode::Write => "w",
             FileMode::ReadWrite => "rw",
         };
-        // if the dir path is just / then dont double the slash
         let dir_path = of.dir_cluster_path.clone();
         let full_path = if dir_path == "/" {
             format!("/{}", of.name)

@@ -1,66 +1,98 @@
 # FAT32 File System Utility
 
-[Description]
-
 ## Group Members
-- **Logan Harmon**: lmh22c@fsu.edu
+
+- **Logan Harmon**: <lmh22c@fsu.edu>
+
 ## Division of Labor
 
 ### Part 1: Mounting the Image
-- **Responsibilities**: [Description]
+
+- **Responsibilities**: Everything
+
 - **Assigned to**: Logan Harmon
 
 ### Part 2: Navigation
-- **Responsibilities**: [Description]
+
+- **Responsibilities**: Everything
+
 - **Assigned to**: Logan Harmon
 
 ### Part 3: Create
-- **Responsibilities**: [Description]
+
+- **Responsibilities**: Everything
+
 - **Assigned to**: Logan Harmon
 
 ### Part 4: Read
-- **Responsibilities**: [Description]
+
+- **Responsibilities**: Everything
+
 - **Assigned to**: Logan Harmon
 
 ### Part 5: Update
-- **Responsibilities**: [Description]
+
+- **Responsibilities**: Everything
+
 - **Assigned to**: Logan Harmon
 
 ### Part 6: Delete
-- **Responsibilities**: [Description]
+
+- **Responsibilities**: Everything
+
 - **Assigned to**: Logan Harmon
 
 ### Extra Credit
-- **Responsibilities**: [Description]
+
+- **Responsibilities**: Everything
+
 - **Assigned to**: Logan Harmon
 
 ## File Listing
-```
+
+```bash
 rust_fat32/
 │
 ├── src/
-│ ├── lexer.c
+│ ├── builtins.rs
+│ ├── builtins/
+│ ├── commands.rs
+│ ├── core.rs
+│ ├── executor.rs
+│ ├── main.rs
+│ ├── models.rs
+│ ├── parser.rs
 │ └── ...
 ├── README.md
+├── Cargo.lock
+├── Cargo.toml
+├── fat32.img
+├── .gitignore
 ```
+
 ## How to Compile & Execute
 
 ### Requirements
-- **Compiler**: e.g., `gcc` for C/C++, `rustc` for Rust.
-- **Dependencies**: List any libraries or frameworks necessary (rust only).
+
+- **Compiler**: rustc
+- **Dependencies**: Rust standard library
 
 ### Compilation
+
 ```bash
 cargo build --release
 ```
+
 ### Execution
+
 ```bash
 cargo run --release
 ```
+
 ## Bugs
-- **Bug 1**: This is bug 1.
-- **Bug 2**: This is bug 2.
-- **Bug 3**: This is bug 3.
+
+- No bugs
 
 ## Considerations
-[Description]
+
+- The size builtin is not written

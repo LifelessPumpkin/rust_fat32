@@ -1,7 +1,6 @@
 use crate::models::{FileMode, ShellCore};
 
 pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
-    // 1) Find open file
     let of = if let Some(of) = shell
         .open_files
         .iter_mut()
@@ -13,7 +12,6 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
         return;
     };
 
-    // 2) Check mode
     match of.mode {
         FileMode::Write | FileMode::ReadWrite => {}
         _ => {
@@ -32,12 +30,10 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
     let sectors_per_cluster = shell.vol.bpb.bpb_sec_per_clus as usize;
     let bytes_per_cluster = bytes_per_sector * sectors_per_cluster;
 
-    // 3) If no cluster yet, allocate first cluster for this file
     if of.start_cluster == 0 {
         match shell.vol.alloc_cluster() {
             Some(new_cl) => {
                 of.start_cluster = new_cl;
-                // NOTE: you should also update dir entry later to store this!
             }
             None => {
                 eprintln!("write: failed to allocate first cluster");
@@ -46,19 +42,15 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
         }
     }
 
-    // Logical offset from start of file
     let mut file_offset = of.offset as usize;
 
-    // Which cluster in the chain does this offset start in?
     let mut cluster = of.start_cluster;
     let mut cluster_index = file_offset / bytes_per_cluster;
     let mut offset_in_cluster = file_offset % bytes_per_cluster;
 
-    // Walk chain to the right cluster
     while cluster_index > 0 {
         let next = shell.vol.fat[cluster as usize];
         if next >= 0x0FFFFFF8 {
-            // Need to extend chain to reach this offset
             match shell.vol.alloc_cluster() {
                 Some(new_cl) => {
                     shell.vol.fat[cluster as usize] = new_cl;
@@ -78,9 +70,7 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
 
     let mut written_total = 0;
 
-    // 4) Write loop
     while remaining > 0 {
-        // Read whole cluster into memory
         let first_sector = shell.vol.get_first_sector_of_cluster(cluster);
         let mut cluster_buf = vec![0u8; bytes_per_cluster];
 
@@ -94,11 +84,9 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
             }
         }
 
-        // How many bytes can we write into this cluster from offset_in_cluster?
         let available_in_cluster = bytes_per_cluster - offset_in_cluster;
         let take = remaining.min(available_in_cluster);
 
-        // Copy from data_bytes into cluster_buf
         let src_start = written_total;
         let src_end = written_total + take;
         let dst_start = offset_in_cluster;
@@ -106,7 +94,6 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
 
         cluster_buf[dst_start..dst_end].copy_from_slice(&data_bytes[src_start..src_end]);
 
-        // Write cluster back to disk
         for sec in 0..sectors_per_cluster {
             let sector_num = first_sector + sec as u32;
             let start = sec * bytes_per_sector;
@@ -125,17 +112,15 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
         remaining -= take;
         file_offset += take;
 
-        // After first cluster, always start at offset 0 in following clusters
         offset_in_cluster = 0;
 
         if remaining > 0 {
             let next = shell.vol.fat[cluster as usize];
             if next >= 0x0FFFFFF8 {
-                // Need to allocate a new cluster
                 match shell.vol.alloc_cluster() {
                     Some(new_cl) => {
                         shell.vol.fat[cluster as usize] = new_cl;
-                        shell.vol.fat[new_cl as usize] = 0x0FFFFFF8; // end of chain
+                        shell.vol.fat[new_cl as usize] = 0x0FFFFFF8;
                         cluster = new_cl;
                     }
                     None => {
@@ -149,13 +134,11 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
         }
     }
 
-    // 5) Update open file’s offset and size
     of.offset = file_offset as u32;
     if file_offset as u32 > of.size {
         of.size = file_offset as u32;
     }
 
-    // Now update dir entry on disk
     if let Err(e) = shell.vol.update_dir_entry(
         of.dir_cluster,      // parent directory
         &of.name,            // short filename
@@ -165,7 +148,6 @@ pub fn write(fd: u32, data: &str, shell: &mut ShellCore) {
         eprintln!("write: failed to update directory entry: {}", e);
     }
 
-    // 7) Flush FAT to disk since we may have allocated clusters
     if let Err(e) = shell.vol.flush_fat() {
         eprintln!("write: failed to flush FAT to disk: {}", e);
         return;

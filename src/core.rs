@@ -2,13 +2,7 @@ use std::{fs::File, io::{Read, Seek, SeekFrom, Write}};
 
 use crate::models::{Volume, ShellCore, BootSector};
 
-// Main core functionality would go here
-// For example, functions to read/write clusters, manage FAT, etc.
-
 impl ShellCore {
-    // I want to add methods here to init the shell which will include 
-    // Setting the volume, current working directory, and open files
-    // Also a method to init and set the BootSector struct
     pub fn new(mut image: File) -> Self {
         let bpb = BootSector::new(&mut image);
         let vol = Volume::new(image, bpb);
@@ -35,7 +29,6 @@ impl Volume {
         file.seek(SeekFrom::Start(fat_offset_bytes)).unwrap();
         file.read_exact(&mut fat_buffer).unwrap();
 
-        // Convert raw FAT bytes into u32 entries
         let mut fat = Vec::new();
         for chunk in fat_buffer.chunks_exact(4) {
             fat.push(u32::from_le_bytes(chunk.try_into().unwrap()));
@@ -89,10 +82,8 @@ impl Volume {
     }
 
     pub fn alloc_cluster(&mut self) -> Option<u32> {
-        // FAT[0] and FAT[1] are reserved, so start at cluster 2
         for cluster in 2..self.fat.len() {
             if self.fat[cluster] == 0 {
-                // Mark as end-of-chain
                 self.fat[cluster] = 0x0FFFFFF8;
                 return Some(cluster as u32);
             }
@@ -235,7 +226,6 @@ impl Volume {
         let bytes_per_sector = self.bpb.bpb_byts_per_sec as usize;
         let fat_size_bytes = (self.bpb.bpb_fatsz32 as usize) * bytes_per_sector;
 
-        // Rebuild FAT as raw bytes
         let mut fat_raw = vec![0u8; fat_size_bytes];
 
         for (i, entry) in self.fat.iter().enumerate() {
@@ -243,7 +233,6 @@ impl Volume {
             fat_raw[i * 4..i * 4 + 4].copy_from_slice(&bytes);
         }
 
-        // Overwrite FAT#1 (and ideally FAT#2)
         let fat_start_sector = self.first_fat_sector;
 
         for sector in 0..self.bpb.bpb_fatsz32 {
@@ -277,7 +266,6 @@ impl Volume {
     pub fn write_sector(&mut self, sector: u32, buf: &[u8]) -> std::io::Result<()> {
         let bytes_per_sector = self.bpb.bpb_byts_per_sec as usize;
 
-        // Safety check: buffer must be exactly 1 sector
         if buf.len() != bytes_per_sector {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -289,17 +277,9 @@ impl Volume {
             ));
         }
 
-        // Convert sector number into byte offset inside the disk image
         let offset = sector as u64 * bytes_per_sector as u64;
-
-        // Move write pointer
         self.file.seek(SeekFrom::Start(offset))?;
-
-        // Write entire sector
         self.file.write_all(buf)?;
-
-        // Optional but safer:
-        // Ensure data is on disk (doesn't stay in OS write buffer)
         self.file.flush()?;
 
         Ok(())
@@ -316,7 +296,6 @@ impl Volume {
             let first_sector = self.get_first_sector_of_cluster(cluster);
             let mut cluster_buf = vec![0u8; bytes_per_cluster];
 
-            // Read entire cluster
             for s in 0..sectors_per_cluster {
                 self.read_sector(
                     first_sector + s as u32,
@@ -324,38 +303,30 @@ impl Volume {
                 )?;
             }
 
-            // Scan 32–byte directory entries
             for offset in (0..bytes_per_cluster).step_by(32) {
                 let entry = &mut cluster_buf[offset..offset + 32];
 
                 let first_byte = entry[0];
                 if first_byte == 0x00 {
-                    // End of directory — not found
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::NotFound,
                         "Directory entry not found",
                     ));
                 }
                 if first_byte == 0xE5 || entry[11] == 0x0F {
-                    // Deleted or LFN entry — skip
                     continue;
                 }
 
                 let short = self.parse_short_name(&entry[0..11]);
                 if short.eq_ignore_ascii_case(name) {
-                    // FOUND THE ENTRY 🎉
 
-                    // Patch cluster (split into two 16-bit pieces)
                     let hi = (new_start_cluster >> 16) as u16;
                     let lo = (new_start_cluster & 0xFFFF) as u16;
 
                     entry[20..22].copy_from_slice(&hi.to_le_bytes());
                     entry[26..28].copy_from_slice(&lo.to_le_bytes());
-
-                    // Patch file size
                     entry[28..32].copy_from_slice(&new_size.to_le_bytes());
 
-                    // Write modified cluster back
                     for s in 0..sectors_per_cluster {
                         let sector_num = first_sector + s as u32;
                         let start = s * bytes_per_sector;
@@ -367,7 +338,6 @@ impl Volume {
                 }
             }
 
-            // Move to next cluster in directory chain
             let next = self.fat[cluster as usize];
             if next >= 0x0FFFFFF8 {
                 return Err(std::io::Error::new(
@@ -424,6 +394,27 @@ impl Volume {
             let start = s * bytes_per_sector;
             let end = start + bytes_per_sector;
             self.write_sector(sector, &buf[start..end])?;
+        }
+
+        Ok(())
+    }
+
+    pub fn dealloc_chain(&mut self, start: u32) -> std::io::Result<()> {
+        if start == 0 { return Ok(()); }
+
+        let mut cur = start as usize;
+        loop {
+            if cur >= self.fat.len() { break; }
+
+            let next = self.fat[cur];
+
+            self.fat[cur] = 0;
+
+            if next >= 0x0FFFFFF8 {
+                break;
+            }
+
+            cur = next as usize;
         }
 
         Ok(())

@@ -31,7 +31,6 @@ fn main() {
     };
 
     let mut shell = crate::models::ShellCore::new(image);
-    // Seek moves the cursor to the point in the file we want to start reading from
     loop {
         create_prompt(&shell);
 
@@ -52,7 +51,6 @@ fn main() {
 fn create_prompt(shell: &ShellCore) {
 
     let image = args().nth(1).unwrap();
-    // Get current directory path from shell
 
     let path = shell.cwd_path.clone();
 

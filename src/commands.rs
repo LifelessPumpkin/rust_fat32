@@ -27,6 +27,8 @@ pub fn execute_built_in(command: &str, shell: &mut ShellCore, args: &[String]) {
         "creat" => creat::creat(args.get(0).map(|s| s.as_str()).unwrap_or(""), shell),
         "write" => write::write(args.get(0).and_then(|s| s.parse().ok()).unwrap_or(0), args.get(1).map(|s| s.as_str()).unwrap_or(""), shell),
         "mv" => mv::mv(shell, args.get(0).map(|s| s.as_str()).unwrap_or(""), args.get(1).map(|s| s.as_str()).unwrap_or("")),
+        "rm" => rm::rm(args.get(0).map(|s| s.as_str()).unwrap_or(""), shell),
+        "rmdir" => rmdir::rmdir(args.get(0).map(|s| s.as_str()).unwrap_or(""), shell),
         _ => eprintln!("Unknown built-in command: {}", command),
     }
 }
