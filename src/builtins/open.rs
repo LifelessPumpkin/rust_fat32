@@ -7,7 +7,7 @@ pub fn open(filename: &str, mode: &str, shell: &mut ShellCore) {
         eprintln!("open: missing filename");
         return;
     }
-    if mode != "r" && mode != "w" && mode != "rw" && mode != "wr" {
+    if mode != "r" && mode != "w" && mode != "rw" && mode != "wr" && mode != "-r" && mode != "-w" && mode != "-rw" && mode != "-wr" {
         eprintln!("Invalid mode specified for open command. Use -r, -w, -rw, or -wr.");
         return;
     }

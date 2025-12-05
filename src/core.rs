@@ -305,4 +305,141 @@ impl Volume {
         Ok(())
     }
 
+    pub fn update_dir_entry( &mut self, parent_cluster: u32, name: &str, new_start_cluster: u32, new_size: u32) -> std::io::Result<()> {
+        let bytes_per_sector = self.bpb.bpb_byts_per_sec as usize;
+        let sectors_per_cluster = self.bpb.bpb_sec_per_clus as usize;
+        let bytes_per_cluster = bytes_per_sector * sectors_per_cluster;
+
+        let mut cluster = parent_cluster;
+
+        loop {
+            let first_sector = self.get_first_sector_of_cluster(cluster);
+            let mut cluster_buf = vec![0u8; bytes_per_cluster];
+
+            // Read entire cluster
+            for s in 0..sectors_per_cluster {
+                self.read_sector(
+                    first_sector + s as u32,
+                    &mut cluster_buf[s * bytes_per_sector..(s + 1) * bytes_per_sector],
+                )?;
+            }
+
+            // Scan 32–byte directory entries
+            for offset in (0..bytes_per_cluster).step_by(32) {
+                let entry = &mut cluster_buf[offset..offset + 32];
+
+                let first_byte = entry[0];
+                if first_byte == 0x00 {
+                    // End of directory — not found
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "Directory entry not found",
+                    ));
+                }
+                if first_byte == 0xE5 || entry[11] == 0x0F {
+                    // Deleted or LFN entry — skip
+                    continue;
+                }
+
+                let short = self.parse_short_name(&entry[0..11]);
+                if short.eq_ignore_ascii_case(name) {
+                    // FOUND THE ENTRY 🎉
+
+                    // Patch cluster (split into two 16-bit pieces)
+                    let hi = (new_start_cluster >> 16) as u16;
+                    let lo = (new_start_cluster & 0xFFFF) as u16;
+
+                    entry[20..22].copy_from_slice(&hi.to_le_bytes());
+                    entry[26..28].copy_from_slice(&lo.to_le_bytes());
+
+                    // Patch file size
+                    entry[28..32].copy_from_slice(&new_size.to_le_bytes());
+
+                    // Write modified cluster back
+                    for s in 0..sectors_per_cluster {
+                        let sector_num = first_sector + s as u32;
+                        let start = s * bytes_per_sector;
+                        let end = start + bytes_per_sector;
+                        self.write_sector(sector_num, &cluster_buf[start..end])?;
+                    }
+
+                    return Ok(());
+                }
+            }
+
+            // Move to next cluster in directory chain
+            let next = self.fat[cluster as usize];
+            if next >= 0x0FFFFFF8 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Directory entry not found (end of chain)",
+                ));
+            }
+            cluster = next;
+        }
+    }
+
+    pub fn read_raw_entry(&mut self, cluster: u32, offset: usize) -> std::io::Result<[u8; 32]> {
+        let bytes_per_sector = self.bpb.bpb_byts_per_sec as usize;
+        let sectors = self.bpb.bpb_sec_per_clus as usize;
+        let bytes_per_cluster = bytes_per_sector * sectors;
+
+        let first_sector = self.get_first_sector_of_cluster(cluster);
+        let mut buf = vec![0u8; bytes_per_cluster];
+
+        for s in 0..sectors {
+            self.read_sector(
+                first_sector + s as u32,
+                &mut buf[s * bytes_per_sector..(s + 1) * bytes_per_sector],
+            )?;
+        }
+
+        let mut entry = [0u8; 32];
+        entry.copy_from_slice(&buf[offset..offset + 32]);
+        Ok(entry)
+    }
+
+    pub fn write_raw_entry(&mut self, cluster: u32, offset: usize, entry: &[u8; 32]) -> std::io::Result<()> {
+        let bytes_per_sector = self.bpb.bpb_byts_per_sec as usize;
+        let sectors = self.bpb.bpb_sec_per_clus as usize;
+        let bytes_per_cluster = bytes_per_sector * sectors;
+
+        let first_sector = self.get_first_sector_of_cluster(cluster);
+        let mut buf = vec![0u8; bytes_per_cluster];
+
+        // read entire cluster
+        for s in 0..sectors {
+            self.read_sector(
+                first_sector + s as u32,
+                &mut buf[s * bytes_per_sector..(s + 1) * bytes_per_sector],
+            )?;
+        }
+
+        // modify only 32 bytes
+        buf[offset..offset + 32].copy_from_slice(entry);
+
+        // write cluster back
+        for s in 0..sectors {
+            let sector = first_sector + s as u32;
+            let start = s * bytes_per_sector;
+            let end = start + bytes_per_sector;
+            self.write_sector(sector, &buf[start..end])?;
+        }
+
+        Ok(())
+    }
+
+    pub fn mark_entry_deleted(&mut self, cluster: u32, offset: usize) -> std::io::Result<()> {
+        let mut entry = self.read_raw_entry(cluster, offset)?;
+        entry[0] = 0xE5;
+        self.write_raw_entry(cluster, offset, &entry)
+    }
+
+    pub fn set_entry_name(&self, entry: &mut [u8], new_name: &str) {
+        let mut name11 = [b' '; 11];
+        for (i, b) in new_name.bytes().take(11).enumerate() {
+            name11[i] = b.to_ascii_uppercase();
+        }
+        entry[..11].copy_from_slice(&name11);
+    }
 }

@@ -30,19 +30,79 @@ impl PartialEq for Token {
 
 pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
-    // Split using whitespace, then match on special chars
-    for part in input.split_whitespace() {
-        match part {
+    // Tokenize by iterating characters so quoted strings remain a single token.
+    let mut cur = String::new();
+    let mut chars = input.chars().peekable();
+
+    // helper to push a completed token string into tokens with correct variant
+    fn push_token(tokens: &mut Vec<Token>, s: String) {
+        if s.is_empty() {
+            return;
+        }
+        match s.as_str() {
             "|" => tokens.push(Token::Pipe),
             ">" => tokens.push(Token::RedirOut),
             "<" => tokens.push(Token::RedirIn),
             "&" => tokens.push(Token::Background),
-            // Only need to handle the ~ and ~/ case
-            t if t.starts_with('~') || t.starts_with("~/") => tokens.push(Token::Tilde(part.to_string())), 
-            p if p.starts_with('$') => tokens.push(Token::EnvVar(p[1..].to_string())),
-            a if a.starts_with('-') => tokens.push(Token::Argument(part.to_string())),
-            _ => tokens.push(Token::Word(part.to_string())),
+            other => {
+                if other.starts_with('~') {
+                    tokens.push(Token::Tilde(other.to_string()));
+                } else if other.starts_with('$') {
+                    tokens.push(Token::EnvVar(other[1..].to_string()));
+                } else if other.starts_with('-') {
+                    tokens.push(Token::Argument(other.to_string()));
+                } else {
+                    tokens.push(Token::Word(other.to_string()));
+                }
+            }
         }
+    }
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            // whitespace separates tokens when not in quotes
+            ' ' | '\t' | '\n' if !cur.is_empty() => {
+                push_token(&mut tokens, cur.clone());
+                cur.clear();
+            }
+            ' ' | '\t' | '\n' => {
+                // skip multiple whitespace
+            }
+            '"' | '\'' => {
+                // quoted string: collect until matching quote, honoring backslash escapes
+                let quote = ch;
+                let mut collected = String::new();
+                while let Some(&next_ch) = chars.peek() {
+                    chars.next();
+                    if next_ch == '\\' {
+                        // escape next character if any
+                        if let Some(esc) = chars.next() {
+                            collected.push(esc);
+                        }
+                        continue;
+                    }
+                    if next_ch == quote {
+                        break;
+                    }
+                    collected.push(next_ch);
+                }
+                // push any pending unquoted prefix + quoted content as a single token
+                if !cur.is_empty() {
+                    cur.push_str(&collected);
+                    push_token(&mut tokens, cur.clone());
+                    cur.clear();
+                } else {
+                    push_token(&mut tokens, collected);
+                }
+            }
+            _ => {
+                cur.push(ch);
+            }
+        }
+    }
+
+    if !cur.is_empty() {
+        push_token(&mut tokens, cur);
     }
     tokens
 }

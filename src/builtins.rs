@@ -1,5 +1,4 @@
 
-
 pub mod ls;
 pub mod cd;
 pub mod creat;
@@ -12,3 +11,6 @@ pub mod info;
 pub mod lsof;
 pub mod exit;
 pub mod lseek;
+pub mod mv;
+pub mod rm;
+pub mod rmdir;
